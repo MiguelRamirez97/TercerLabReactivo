@@ -1,0 +1,16 @@
+
+E
+java:S5411N"*Use the primitive boolean expression here.(É‰¿Åýÿÿÿÿ
+]	java:S125"<This block of commented-out lines of code should be removed.(¯öµ½øÿÿÿÿ8ƒé©™˜/
+Ž
+java:S4165¡"kRemove this useless assignment; "bonoForObject" already holds the assigned value along all execution paths.(²‰½úÿÿÿÿ8åÁí—˜/
+@
+java:S5411Q"*Use the primitive boolean expression here.(Åéô¹
+U
+java:S1144C"3Remove this unused private "createFluxFrom" method.(ã’â¢üÿÿÿÿ8Êú¤™˜/
+U
+java:S1118":Add a private constructor to hide the implicit public one.(–ìÓùÿÿÿÿ
+[
+java:S3358‡"DExtract this nested ternary operation into an independent statement.(Ã¼”¡
+`
+java:S3358†"DExtract this nested ternary operation into an independent statement.(ªÔùœþÿÿÿÿ

@@ -20,46 +20,39 @@ public class HelperKata {
     private static String anteriorBono = null;
 
     public static Flux<CouponDetailDto> getListFromBase64File(final String fileBase64) {
+        return getCouponDetailDtoFlux(createFluxFrom(fileBase64));
+    }
 
-        try (InputStream inputStream = new ByteArrayInputStream(decodeBase64(fileBase64));
-             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
-        ) {
-            AtomicInteger counter = new AtomicInteger(0);
-            String characterSeparated = FileCSVEnum.CHARACTER_DEFAULT.getId();
-            Set<String> codes = new HashSet<>();
-            return Flux.fromIterable(
-                    bufferedReader.lines().skip(1)
-                            .map(line -> getTupleOfLine(line, line.split(characterSeparated), characterSeparated))
-                            .map(tuple -> {
-                                String dateValidated = null;
-                                String errorMessage;
-                                String bonoForObject = null;
-                                String bonoEnviado;
+    private static Flux<CouponDetailDto> getCouponDetailDtoFlux(Flux<String> fileBase64) {
+        AtomicInteger counter = new AtomicInteger(0);
+        String characterSeparated = FileCSVEnum.CHARACTER_DEFAULT.getId();
+        Set<String> codes = new HashSet<>();
+        return fileBase64.skip(1)
+                    .map(line -> getTupleOfLine(line, line.split(characterSeparated), characterSeparated))
+                    .map(tuple -> getCouponDetailDto(counter, codes, tuple));
+    }
 
+    private static CouponDetailDto getCouponDetailDto(AtomicInteger counter, Set<String> codes, Tuple2<String, String> tuple) {
+        String dateValidated = null;
+        String errorMessage;
+        String bonoForObject;
+        String bonoEnviado;
 
-                                errorMessage = getErrorMessage(tuple,codes);
-                                if (errorMessage == null){
-                                    dateValidated = tuple.getT2();
-                                }
-
-                                bonoEnviado = tuple.getT1();
-                                bonoForObject = getBonoForObject(bonoForObject,bonoEnviado);
-
-                                return CouponDetailDto.aCouponDetailDto()
-                                        .withCode(bonoForObject)
-                                        .withDueDate(dateValidated)
-                                        .withNumberLine(counter.incrementAndGet())
-                                        .withMessageError(errorMessage)
-                                        .withTotalLinesFile(1)
-                                        .build();
-                            }).collect(Collectors.toList())
-
-            );
-
-        } catch (IOException e) {
-            e.printStackTrace();
+        errorMessage = getErrorMessage(tuple, codes);
+        if (errorMessage == null) {
+            dateValidated = tuple.getT2();
         }
-        return Flux.empty();
+
+        bonoEnviado = tuple.getT1();
+        bonoForObject = getBonoForObject(bonoEnviado);
+
+        return CouponDetailDto.aCouponDetailDto()
+                .withCode(bonoForObject)
+                .withDueDate(dateValidated)
+                .withNumberLine(counter.incrementAndGet())
+                .withMessageError(errorMessage)
+                .withTotalLinesFile(1)
+                .build();
     }
 
     private static Flux<String> createFluxFrom(String fileBase64) {
@@ -96,7 +89,7 @@ public class HelperKata {
 
     public static String getErrorMessage(Tuple2<String,String> tuple,Set<String> codes){
         String errorMessage;
-        if (tuple.getT1().isBlank() || tuple.getT2().isBlank()) {
+        if (errorColumnEmpty(tuple)) {
             errorMessage = ExperienceErrorsEnum.FILE_ERROR_COLUMN_EMPTY.toString();
         }
         else if (!codes.add(tuple.getT1())) {
@@ -112,6 +105,10 @@ public class HelperKata {
             errorMessage = null;
         }
         return errorMessage;
+    }
+
+    public static boolean errorColumnEmpty(Tuple2<String,String> tuple){
+        return tuple.getT1().isBlank() || tuple.getT2().isBlank();
     }
 
     public static boolean validateDateRegex(String dateForValidate) {
@@ -148,14 +145,11 @@ public class HelperKata {
         }
     }
 
-    public static String getBonoForObject(String bonoForObject,String bonoEnviado){
-        if (anteriorBono == null || anteriorBono.equals("")) {
+    public static String getBonoForObject(String bonoEnviado){
+        String bonoForObject = null;
+        if (bonoAnteriorNullOrEmpty()) {
             anteriorBono = typeBono(bonoEnviado);
-            if (anteriorBono.equals("")) {
-                bonoForObject = null;
-            } else {
-                bonoForObject = bonoEnviado;
-            }
+            bonoForObject = anteriorBono.equals("") ? null : bonoEnviado;
         } else if (anteriorBono.equals(typeBono(bonoEnviado))) {
             bonoForObject = bonoEnviado;
         } else if (!anteriorBono.equals(typeBono(bonoEnviado))) {
@@ -163,4 +157,9 @@ public class HelperKata {
         }
         return bonoForObject;
     }
+
+    public static boolean bonoAnteriorNullOrEmpty(){
+        return anteriorBono == null || anteriorBono.equals("");
+    }
+
 }
