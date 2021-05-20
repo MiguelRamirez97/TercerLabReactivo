@@ -2,8 +2,6 @@ package com.example;
 
 
 import reactor.core.publisher.Flux;
-import reactor.util.function.Tuple2;
-import reactor.util.function.Tuples;
 
 import java.io.*;
 import java.text.SimpleDateFormat;
@@ -22,48 +20,34 @@ public class HelperKata {
         AtomicInteger counter = new AtomicInteger(0);
         String characterSeparated = FileCSVEnum.CHARACTER_DEFAULT.getId();
         Set<String> codes = new HashSet<>();
-        return createFluxFrom(fileBase64).skip(1)
-                .map(line -> getTupleOfLine(line, line.split(characterSeparated), characterSeparated))
-                .map(tuple -> getCouponDetailDto(counter, codes, tuple));
+        return createFluxFrom(fileBase64).map(formatCupon -> createCuponFormat(formatCupon
+                .split(characterSeparated))).map(cupon -> getCouponDetailDto(counter,codes,cupon));
     }
 
     private static Flux<String> createFluxFrom(String fileBase64) {
         return Flux.using(() -> new BufferedReader(new InputStreamReader(
                         new ByteArrayInputStream(decodeBase64(fileBase64))
-                )).lines(),
+                )).lines().skip(1),
                 Flux::fromStream,
                 Stream::close
         );
     }
 
-    private static Tuple2<String, String> getTupleOfLine(String line, String[] array, String characterSeparated) {
-        Tuple2<String, String> tuple = Tuples.of(array[0], array[1]);
-        if(nullOrEmpty(array)){
-            tuple = Tuples.of(EMPTY_STRING, EMPTY_STRING);
-        }else if (array.length < 2){
-            tuple = line.startsWith(characterSeparated) ?
-                    Tuples.of(EMPTY_STRING, array[0]) : Tuples.of(array[0], EMPTY_STRING);
-        }
-        return tuple;
+    private static ModeloCupon createCuponFormat(String[] array){
+        return new ModeloCupon(array[0],array[1]);
     }
 
-    public static boolean nullOrEmpty(String[] array){
-        return Objects.isNull(array) || array.length == 0;
-    }
-
-    private static CouponDetailDto getCouponDetailDto(AtomicInteger counter, Set<String> codes, Tuple2<String, String> tuple) {
+    private static CouponDetailDto getCouponDetailDto(AtomicInteger counter, Set<String> codes, ModeloCupon cupon) {
         String dateValidated = null;
-        String errorMessage;
         String bonoEnviado;
         String bonoForObject;
 
-
-        errorMessage = getErrorMessage(tuple, codes);
+        String errorMessage = getErrorMessage(cupon, codes);
         if (errorMessage == null) {
-            dateValidated = tuple.getT2();
+            dateValidated = cupon.getDate();
         }
 
-        bonoEnviado = tuple.getT1();
+        bonoEnviado = cupon.getBono();
         bonoForObject = getBonoForObject(bonoEnviado);
 
         return CouponDetailDto.aCouponDetailDto()
@@ -75,20 +59,12 @@ public class HelperKata {
                 .build();
     }
 
-
-
     public static String typeBono(String bonoIn) {
-        String typeBono;
-        if (bonoEAN13(bonoIn)) {
-            typeBono = ValidateCouponEnum.EAN_13.getTypeOfEnum();
-        }
-        else if (bonoEAN39(bonoIn)) {
-            typeBono = ValidateCouponEnum.EAN_39.getTypeOfEnum();
-        }
-        else {
-            typeBono = ValidateCouponEnum.ALPHANUMERIC.getTypeOfEnum();
-        }
-        return typeBono;
+        return bonoEAN13(bonoIn)
+                ? ValidateCouponEnum.EAN_13.getTypeOfEnum()
+                : (bonoEAN39(bonoIn))
+                ? ValidateCouponEnum.EAN_39.getTypeOfEnum()
+                : ValidateCouponEnum.ALPHANUMERIC.getTypeOfEnum();
     }
 
     public static Boolean bonoEAN13(String bonoIn){
@@ -108,25 +84,22 @@ public class HelperKata {
                 && bonoIn.replace("*", "").length() <= 43;
     }
 
-    public static String getErrorMessage(Tuple2<String,String> tuple,Set<String> codes){
-        String errorMessage = null;
-        if (errorColumnEmpty(tuple)) {
-            errorMessage = ExperienceErrorsEnum.FILE_ERROR_COLUMN_EMPTY.toString();
+    public static String getErrorMessage(ModeloCupon cupon,Set<String> codes){
+        Map<String, Boolean> error = new LinkedHashMap<>();
+        error.put(ExperienceErrorsEnum.FILE_ERROR_COLUMN_EMPTY.toString(), errorColumnEmpty(cupon));
+        error.put(ExperienceErrorsEnum.FILE_ERROR_CODE_DUPLICATE.toString(), (!codes.add(cupon.getBono())));
+        error.put(ExperienceErrorsEnum.FILE_ERROR_DATE_PARSE.toString(), (!validateDateRegex(cupon.getDate())));
+        error.put(ExperienceErrorsEnum.FILE_DATE_IS_MINOR_OR_EQUALS.toString(), validateDateIsMinor(cupon.getDate()));
+        for (Map.Entry<String, Boolean> errorbono : error.entrySet()){
+            if(errorbono.getValue()){
+                return errorbono.getKey();
+            }
         }
-        if (!codes.add(tuple.getT1())) {
-            errorMessage = ExperienceErrorsEnum.FILE_ERROR_CODE_DUPLICATE.toString();
-        }
-        if (!validateDateRegex(tuple.getT2())) {
-            errorMessage = ExperienceErrorsEnum.FILE_ERROR_DATE_PARSE.toString();
-        }
-        if (validateDateIsMinor(tuple.getT2())) {
-            errorMessage = ExperienceErrorsEnum.FILE_DATE_IS_MINOR_OR_EQUALS.toString();
-        }
-        return errorMessage;
+        return null;
     }
 
-    public static boolean errorColumnEmpty(Tuple2<String,String> tuple){
-        return tuple.getT1().isBlank() || tuple.getT2().isBlank();
+    public static boolean errorColumnEmpty(ModeloCupon cupon){
+        return cupon.getBono().equals(EMPTY_STRING) || cupon.getDate().equals(EMPTY_STRING);
     }
 
     public static boolean validateDateRegex(String dateForValidate) {
